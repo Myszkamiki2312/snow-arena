@@ -10,7 +10,8 @@
     "set-admin-claim": "node scripts/set-admin-claim.mjs",
     "sync-cortina-data": "node scripts/sync-cortina-data.mjs",
     "sync-cortina-wikipedia": "node scripts/sync-cortina-wikipedia.mjs",
-    "generate-medal-drafts": "node scripts/generate-medal-drafts.mjs"
+    "generate-medal-drafts": "node scripts/generate-medal-drafts.mjs",
+    "generate-daily-summary-draft": "node scripts/generate-daily-summary-draft.mjs"
   },
   "dependencies": {
     "cheerio": "^1.1.2",

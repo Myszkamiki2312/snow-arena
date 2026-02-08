@@ -67,7 +67,8 @@ npm run sync-cortina-wikipedia
 
 Workflow po synchronizacji:
 - generuje szkice do kolekcji `article_drafts`,
-- wysyła mail, gdy pojawią się nowe szkice lub zmieni się tabela medalowa.
+- wysyła mail, gdy pojawią się nowe szkice lub zmieni się tabela medalowa,
+- po 22:00 (Europe/Warsaw) tworzy szkic „Dzień na IO...” i wysyła mail.
 
 Wymagane sekrety GitHub:
 - `SMTP_USER` (adres Gmail)

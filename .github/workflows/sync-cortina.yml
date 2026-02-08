@@ -45,6 +45,18 @@ jobs:
           NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
         run: npm run generate-medal-drafts
 
+      - name: Generate daily summary draft (22:00 Europe/Warsaw)
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/service-account.json
+          DAILY_SUMMARY_TZ: Europe/Warsaw
+          DAILY_SUMMARY_HOUR: 22
+          SMTP_HOST: smtp.gmail.com
+          SMTP_PORT: 465
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          NOTIFY_EMAIL_TO: ${{ secrets.NOTIFY_EMAIL_TO }}
+        run: npm run generate-daily-summary-draft
+
       - name: Cleanup key file
         if: always()
         run: rm -f service-account.json
