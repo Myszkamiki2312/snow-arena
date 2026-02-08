@@ -73,6 +73,13 @@ function deterministicId(parts) {
   return crypto.createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 24)
 }
 
+function sanitizeCountryName(rawName) {
+  return cleanText(rawName)
+    .replace(/\*+/g, '')
+    .replace(/\s*\(.*?\)\s*/g, ' ')
+    .trim()
+}
+
 function detectMedalEvent(title) {
   const text = cleanText(title).toLowerCase()
   if (!text) return false
@@ -89,27 +96,41 @@ function parseMedals(html) {
   const medals = []
 
   const table = $('table.wikitable').filter((_, el) => {
-    const headers = $(el).find('tr').first().text().toLowerCase()
-    return headers.includes('gold') && headers.includes('silver') && headers.includes('bronze')
+    const headersText = $(el).find('tr').first().text().toLowerCase()
+    return headersText.includes('gold') && headersText.includes('silver') && headersText.includes('bronze')
   }).first()
+
+  if (!table.length) return medals
+
+  const headerCells = table.find('tr').first().find('th,td')
+  const headers = headerCells
+    .toArray()
+    .map((cell) => cleanText($(cell).text()).toLowerCase())
+
+  const findIndex = (patterns, fallbackIndex) => {
+    const index = headers.findIndex((header) => patterns.some((pattern) => header.includes(pattern)))
+    return index >= 0 ? index : fallbackIndex
+  }
+
+  const countryIndex = findIndex(['noc', 'nation', 'team', 'country'], 1)
+  const goldIndex = findIndex(['gold'], 2)
+  const silverIndex = findIndex(['silver'], 3)
+  const bronzeIndex = findIndex(['bronze'], 4)
 
   table.find('tr').slice(1).each((_, row) => {
     const cells = $(row).find('th,td')
-    if (cells.length < 5) return
+    if (cells.length <= bronzeIndex || cells.length <= countryIndex) return
 
-    const rankRaw = cleanText($(cells[0]).text())
-    if (!/^\d+$/.test(rankRaw)) return
-
-    const countryCell = $(cells[1])
-    const countryName = cleanText(countryCell.text())
+    const countryCell = $(cells[countryIndex])
+    const countryName = sanitizeCountryName(countryCell.text())
     if (!countryName) return
 
     const alpha2 = countries.getAlpha2Code(countryName, 'en')
     const alpha3 = alpha2 ? countries.alpha2ToAlpha3(alpha2) : null
 
-    const gold = Number(cleanText($(cells[2]).text())) || 0
-    const silver = Number(cleanText($(cells[3]).text())) || 0
-    const bronze = Number(cleanText($(cells[4]).text())) || 0
+    const gold = Number(cleanText($(cells[goldIndex]).text())) || 0
+    const silver = Number(cleanText($(cells[silverIndex]).text())) || 0
+    const bronze = Number(cleanText($(cells[bronzeIndex]).text())) || 0
 
     medals.push({
       code: alpha3 || deterministicId([countryName]).slice(0, 3).toUpperCase(),
