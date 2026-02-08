@@ -12,6 +12,11 @@ countries.registerLocale(enLocale)
 const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
 const sourceTag = 'wikipedia-cortina-2026'
 const medalTableUrl = 'https://en.wikipedia.org/wiki/2026_Winter_Olympics_medal_table'
+const codeAliases = {
+  DEU: 'GER',
+  SVN: 'SLO',
+  NLD: 'NED',
+}
 
 const sportPages = [
   { sport: 'Narciarstwo alpejskie', icon: 'fa-solid fa-person-skiing', slug: 'Alpine_skiing_at_the_2026_Winter_Olympics' },
@@ -80,6 +85,10 @@ function sanitizeCountryName(rawName) {
     .trim()
 }
 
+function looksLikeValidCountry(countryName) {
+  return /\p{L}/u.test(countryName) && !/^\d+$/.test(countryName)
+}
+
 function detectMedalEvent(title) {
   const text = cleanText(title).toLowerCase()
   if (!text) return false
@@ -123,17 +132,19 @@ function parseMedals(html) {
 
     const countryCell = $(cells[countryIndex])
     const countryName = sanitizeCountryName(countryCell.text())
-    if (!countryName) return
+    if (!countryName || !looksLikeValidCountry(countryName)) return
 
     const alpha2 = countries.getAlpha2Code(countryName, 'en')
     const alpha3 = alpha2 ? countries.alpha2ToAlpha3(alpha2) : null
+    if (!alpha3) return
+    const normalizedCode = codeAliases[alpha3] || alpha3
 
     const gold = Number(cleanText($(cells[goldIndex]).text())) || 0
     const silver = Number(cleanText($(cells[silverIndex]).text())) || 0
     const bronze = Number(cleanText($(cells[bronzeIndex]).text())) || 0
 
     medals.push({
-      code: alpha3 || deterministicId([countryName]).slice(0, 3).toUpperCase(),
+      code: normalizedCode,
       country: countryName,
       flag: alpha2 ? `https://flagcdn.com/w40/${alpha2.toLowerCase()}.png` : '',
       gold,
