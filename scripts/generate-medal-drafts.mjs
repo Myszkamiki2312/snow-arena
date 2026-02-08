@@ -1,5 +1,6 @@
 import process from 'node:process'
 import fs from 'node:fs'
+import crypto from 'node:crypto'
 import { initializeApp, cert } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 import nodemailer from 'nodemailer'
@@ -14,6 +15,7 @@ if (!credentialsPath || !fs.existsSync(credentialsPath)) {
 const serviceAccount = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'))
 initializeApp({ credential: cert(serviceAccount) })
 const db = getFirestore()
+const automationStateRef = db.collection('automation_state').doc('notifications')
 
 function buildDraft(event) {
   const date = event.date || ''
@@ -55,16 +57,52 @@ function buildDraft(event) {
   }
 }
 
-async function sendNotificationEmail(newDraftsCount) {
+function buildMedalHash(medals) {
+  const normalized = medals
+    .map((item) => ({
+      code: item.code || '',
+      gold: Number(item.gold || 0),
+      silver: Number(item.silver || 0),
+      bronze: Number(item.bronze || 0),
+    }))
+    .sort((a, b) => String(a.code).localeCompare(String(b.code)))
+
+  return crypto.createHash('sha1').update(JSON.stringify(normalized)).digest('hex')
+}
+
+function formatTopMedals(medals) {
+  if (medals.length === 0) return 'Brak danych medalowych.'
+  return medals
+    .slice(0, 5)
+    .map((item, index) => `${index + 1}. ${item.country || item.code} 🥇${item.gold} 🥈${item.silver} 🥉${item.bronze}`)
+    .join('\n')
+}
+
+async function loadMedalSnapshot() {
+  const snap = await db.collection('medals').get()
+  const medals = snap.docs.map((docSnap) => docSnap.data())
+  medals.sort((a, b) => Number(b.gold || 0) - Number(a.gold || 0) || Number(b.silver || 0) - Number(a.silver || 0) || Number(b.bronze || 0) - Number(a.bronze || 0))
+  return medals
+}
+
+async function loadTodayMedalEventsCount(todayIso) {
+  const snap = await db.collection('daily_medal_events').doc(todayIso).get()
+  if (!snap.exists) return 0
+  return Number(snap.data().totalMedalEvents || 0)
+}
+
+async function sendNotificationEmail({ newDraftsCount, medalTableChanged, medalsTop5, todayMedalEvents }) {
   const host = process.env.SMTP_HOST
   const port = Number(process.env.SMTP_PORT || 465)
   const user = process.env.SMTP_USER
   const pass = process.env.SMTP_PASS
   const to = process.env.NOTIFY_EMAIL_TO
 
-  if (!host || !user || !pass || !to || newDraftsCount === 0) {
+  if (!host || !user || !pass || !to) {
     return
   }
+
+  if (newDraftsCount === 0 && !medalTableChanged) return
 
   const transporter = nodemailer.createTransport({
     host,
@@ -73,11 +111,28 @@ async function sendNotificationEmail(newDraftsCount) {
     auth: { user, pass },
   })
 
+  const subjectParts = []
+  if (newDraftsCount > 0) subjectParts.push(`${newDraftsCount} nowych szkiców`)
+  if (medalTableChanged) subjectParts.push('aktualizacja tabeli medalowej')
+
+  const body = [
+    'Hej,',
+    '',
+    `Nowe szkice medalowe: ${newDraftsCount}`,
+    `Tabela medalowa zmieniona: ${medalTableChanged ? 'TAK' : 'NIE'}`,
+    `Wydarzenia medalowe dziś: ${todayMedalEvents}`,
+    '',
+    'Top 5 tabeli medalowej:',
+    medalsTop5,
+    '',
+    'Panel admina: https://snowarena.firebaseapp.com/admin',
+  ].join('\n')
+
   await transporter.sendMail({
     from: `"Snow Arena Bot" <${user}>`,
     to,
-    subject: `Snow Arena: ${newDraftsCount} nowych szkiców artykułów`,
-    text: `Hej, mam ${newDraftsCount} nowych szkiców artykułów medalowych. Wejdź do panelu admina i kliknij opublikuj.`,
+    subject: `Snow Arena: ${subjectParts.join(' + ')}`,
+    text: body,
   })
 
   console.log(`Wysłano powiadomienie email do ${to}`)
@@ -85,6 +140,14 @@ async function sendNotificationEmail(newDraftsCount) {
 
 async function main() {
   const todayIso = new Date().toISOString().slice(0, 10)
+
+  const medals = await loadMedalSnapshot()
+  const currentMedalHash = buildMedalHash(medals)
+  const stateSnap = await automationStateRef.get()
+  const previousMedalHash = stateSnap.exists ? stateSnap.data().lastMedalHash : null
+  const medalTableChanged = previousMedalHash !== currentMedalHash
+  const todayMedalEvents = await loadTodayMedalEventsCount(todayIso)
+
   const eventsSnap = await db
     .collection('events')
     .where('date', '==', todayIso)
@@ -107,7 +170,21 @@ async function main() {
   }
 
   console.log(`Nowe szkice: ${createdCount}`)
-  await sendNotificationEmail(createdCount)
+  await sendNotificationEmail({
+    newDraftsCount: createdCount,
+    medalTableChanged,
+    medalsTop5: formatTopMedals(medals),
+    todayMedalEvents,
+  })
+
+  await automationStateRef.set(
+    {
+      lastMedalHash: currentMedalHash,
+      lastRunAt: new Date().toISOString(),
+      lastDraftsCreated: createdCount,
+    },
+    { merge: true },
+  )
 }
 
 main().catch((error) => {

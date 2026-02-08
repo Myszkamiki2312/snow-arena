@@ -67,7 +67,7 @@ npm run sync-cortina-wikipedia
 
 Workflow po synchronizacji:
 - generuje szkice do kolekcji `article_drafts`,
-- wysyła mail, gdy pojawią się nowe szkice.
+- wysyła mail, gdy pojawią się nowe szkice lub zmieni się tabela medalowa.
 
 Wymagane sekrety GitHub:
 - `SMTP_USER` (adres Gmail)
