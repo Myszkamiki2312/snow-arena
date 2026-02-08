@@ -5,12 +5,12 @@ import { getAuth } from "firebase/auth";
 
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCrKt30UtLpP76Q3C85-697vVPWkz8RlXA",
-  authDomain: "snowarena.firebaseapp.com",
-  projectId: "snowarena",
-  storageBucket: "snowarena.firebasestorage.app",
-  messagingSenderId: "110495883639",
-  appId: "1:110495883639:web:9b6a40d4ed7affabd14172"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCrKt30UtLpP76Q3C85-697vVPWkz8RlXA",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "snowarena.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "snowarena",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "snowarena.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "110495883639",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:110495883639:web:9b6a40d4ed7affabd14172"
 };
 
 

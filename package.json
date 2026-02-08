@@ -6,10 +6,16 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "set-admin-claim": "node scripts/set-admin-claim.mjs",
+    "sync-cortina-data": "node scripts/sync-cortina-data.mjs",
+    "sync-cortina-wikipedia": "node scripts/sync-cortina-wikipedia.mjs"
   },
   "dependencies": {
+    "cheerio": "^1.1.2",
+    "firebase-admin": "^13.6.0",
     "firebase": "^12.9.0",
+    "i18n-iso-countries": "^7.14.0",
     "vue": "^3.5.27",
     "vue-router": "^5.0.1"
   },

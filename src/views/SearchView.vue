@@ -2,26 +2,35 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { db } from '../firebase'
-import { collection, getDocs, query, orderBy } from 'firebase/firestore'
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore'
 
 const route = useRoute()
 const searchResults = ref([])
 const loading = ref(true)
 const queryText = ref('')
+let searchTimeout = null
 
 const performSearch = async (txt) => {
+    const safeTxt = String(txt || '').trim()
+    queryText.value = safeTxt
+
+    if (safeTxt.length < 2) {
+        searchResults.value = []
+        loading.value = false
+        return
+    }
+
     loading.value = true
-    queryText.value = txt
     try {
        
-        const q = query(collection(db, 'articles'), orderBy('date', 'desc'))
+        const q = query(collection(db, 'articles'), orderBy('date', 'desc'), limit(250))
         const snap = await getDocs(q)
         const allDocs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
         
       
-        const lowerTxt = txt.toLowerCase()
+        const lowerTxt = safeTxt.toLowerCase()
         searchResults.value = allDocs.filter(doc => 
-            doc.title.toLowerCase().includes(lowerTxt) || 
+            (doc.title || '').toLowerCase().includes(lowerTxt) || 
             (doc.content && doc.content.toLowerCase().includes(lowerTxt))
         )
     } catch (e) { console.log(e) }
@@ -29,7 +38,10 @@ const performSearch = async (txt) => {
 }
 
 onMounted(() => performSearch(route.query.q))
-watch(() => route.query.q, (newQ) => performSearch(newQ))
+watch(() => route.query.q, (newQ) => {
+    clearTimeout(searchTimeout)
+    searchTimeout = setTimeout(() => performSearch(newQ), 220)
+})
 </script>
 
 <template>

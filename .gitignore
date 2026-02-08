@@ -36,3 +36,7 @@ __screenshots__/
 
 
 *.timestamp-*-*.mjs
+.env
+.env.*
+!.env.example
+service-account.json

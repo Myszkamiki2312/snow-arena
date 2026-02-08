@@ -1,11 +1,14 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { db } from '../firebase'
-import { doc, getDoc, updateDoc } from 'firebase/firestore'
+import { doc, getDoc, runTransaction } from 'firebase/firestore'
 
 const poll = ref(null)
 const hasVoted = ref(false)
 const loading = ref(true)
+const voting = ref(false)
+
+const buildVoteKey = (question) => `vote_${question}`
 
 
 const fetchPoll = async () => {
@@ -15,7 +18,7 @@ const fetchPoll = async () => {
         
         if (snap.exists()) {
             poll.value = { id: snap.id, ...snap.data() }
-            if (localStorage.getItem(`vote_${poll.value.question}`)) {
+            if (localStorage.getItem(buildVoteKey(poll.value.question))) {
                 hasVoted.value = true
             }
         }
@@ -27,23 +30,37 @@ const fetchPoll = async () => {
 }
 
 const vote = async (optionIndex) => {
-    if (hasVoted.value || !poll.value) return
+    if (hasVoted.value || voting.value || !poll.value) return
+    voting.value = true
 
-    
-    hasVoted.value = true
-    localStorage.setItem(`vote_${poll.value.question}`, 'true')
-
-   
-    poll.value.options[optionIndex].votes++
-
-    
     try {
-        const docRef = doc(db, 'polls', 'active_poll')
-        await updateDoc(docRef, {
-            options: poll.value.options
+        const pollRef = doc(db, 'polls', 'active_poll')
+
+        await runTransaction(db, async (transaction) => {
+            const snap = await transaction.get(pollRef)
+            if (!snap.exists()) {
+                throw new Error('Brak aktywnej sondy')
+            }
+
+            const data = snap.data()
+            const options = [...(data.options || [])]
+            if (!options[optionIndex]) {
+                throw new Error('Niepoprawna opcja głosowania')
+            }
+
+            const currentVotes = Number(options[optionIndex].votes || 0)
+            options[optionIndex] = { ...options[optionIndex], votes: currentVotes + 1 }
+
+            transaction.update(pollRef, { options })
+            poll.value = { ...poll.value, options }
         })
+
+        hasVoted.value = true
+        localStorage.setItem(buildVoteKey(poll.value.question), 'true')
     } catch (e) {
         console.error("Nie udało się zapisać głosu", e)
+    } finally {
+        voting.value = false
     }
 }
 
@@ -77,6 +94,7 @@ onMounted(() => {
             v-for="(opt, index) in poll.options" 
             :key="index" 
             class="vote-btn" 
+            :disabled="voting"
             @click="vote(index)"
           >
             {{ opt.text }}
@@ -129,6 +147,7 @@ h3 { margin: 0; color: #06b6d4; font-family: 'Oswald'; font-size: 1rem; letter-s
     font-weight: 500;
 }
 .vote-btn:hover { background: #06b6d4; color: #0f172a; border-color: #06b6d4; transform: translateX(5px); }
+.vote-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
 
 .results-list { display: flex; flex-direction: column; gap: 15px; }

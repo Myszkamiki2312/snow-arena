@@ -1,24 +1,33 @@
 <script setup>
 import { ref } from 'vue'
 import { auth } from '../firebase'
-import { signInWithEmailAndPassword } from 'firebase/auth'
-import { useRouter } from 'vue-router'
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import { useRoute, useRouter } from 'vue-router'
+import { resolveIsAdmin } from '../auth'
 
 const email = ref('')
 const password = ref('')
 const errorMsg = ref('')
 const router = useRouter()
+const route = useRoute()
 
 const login = async () => {
   try {
-   
-    await signInWithEmailAndPassword(auth, email.value, password.value)
-   
-    router.push('/admin') 
+    errorMsg.value = ''
+    const credentials = await signInWithEmailAndPassword(auth, email.value, password.value)
+    const allowedToAdmin = await resolveIsAdmin(credentials.user, { forceRefresh: true })
+
+    if (!allowedToAdmin) {
+      await signOut(auth)
+      errorMsg.value = 'To konto nie ma uprawnień administratora.'
+      return
+    }
+
+    const redirectPath = typeof route.query.redirect === 'string' ? route.query.redirect : '/admin'
+    router.push(redirectPath)
   } catch (e) {
-   
     console.log(e)
-    errorMsg.value = "Błędne dane! Dostęp tylko dla Szefa. 🔒"
+    errorMsg.value = 'Błędne dane logowania lub brak dostępu.'
   }
 }
 </script>
