@@ -56,6 +56,7 @@ Obsługiwane formaty:
 Skrypt pobiera:
 - medal table z `2026 Winter Olympics medal table`
 - harmonogram konkurencji z podstron dyscyplin `...at the 2026 Winter Olympics`
+- oznacza wydarzenia medalowe i buduje dzienne podsumowania w `daily_medal_events`
 
 ```sh
 export GOOGLE_APPLICATION_CREDENTIALS="/sciezka/do/service-account.json"

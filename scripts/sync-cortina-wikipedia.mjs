@@ -73,6 +73,17 @@ function deterministicId(parts) {
   return crypto.createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 24)
 }
 
+function detectMedalEvent(title) {
+  const text = cleanText(title).toLowerCase()
+  if (!text) return false
+
+  const excluded = ['qualification', 'qualifying', 'training', 'practice', 'round robin', 'preliminary', 'group stage', 'heat']
+  if (excluded.some((item) => text.includes(item))) return false
+
+  const medalLike = ['final', 'medal', 'gold medal game', 'bronze medal game', 'big final', 'small final']
+  return medalLike.some((item) => text.includes(item))
+}
+
 function parseMedals(html) {
   const $ = load(html)
   const medals = []
@@ -152,6 +163,7 @@ function parseScheduleRows(html, sportMeta) {
 
     const time = normalizeTime(timeText)
     const id = deterministicId([sportMeta.sport, isoDate, time, eventText])
+    const isMedalEvent = detectMedalEvent(eventText)
 
     events.push({
       id,
@@ -160,6 +172,7 @@ function parseScheduleRows(html, sportMeta) {
       date: isoDate,
       time,
       icon: sportMeta.icon,
+      isMedalEvent,
       source: sourceTag,
     })
   })
@@ -222,11 +235,62 @@ async function syncEvents() {
 
   await batch.commit()
   console.log(`Wydarzenia zsynchronizowane: ${allEvents.length}`)
+  return allEvents
+}
+
+async function syncDailyMedalEvents(events) {
+  const medalEvents = events.filter((event) => event.isMedalEvent)
+  const grouped = new Map()
+
+  for (const event of medalEvents) {
+    if (!grouped.has(event.date)) grouped.set(event.date, [])
+    grouped.get(event.date).push(event)
+  }
+
+  const batch = db.batch()
+  const seenDates = new Set()
+
+  for (const [date, dayEvents] of grouped.entries()) {
+    seenDates.add(date)
+    const ref = db.collection('daily_medal_events').doc(date)
+    const sorted = [...dayEvents].sort((a, b) => `${a.time}`.localeCompare(`${b.time}`))
+    const sports = [...new Set(sorted.map((item) => item.sport))].sort()
+
+    batch.set(
+      ref,
+      {
+        date,
+        source: sourceTag,
+        totalMedalEvents: sorted.length,
+        sports,
+        events: sorted.map((item) => ({
+          id: item.id,
+          title: item.title,
+          sport: item.sport,
+          time: item.time,
+          icon: item.icon,
+        })),
+        updatedAtISO: new Date().toISOString(),
+      },
+      { merge: true },
+    )
+  }
+
+  const currentSnapshot = await db.collection('daily_medal_events').where('source', '==', sourceTag).get()
+  currentSnapshot.docs.forEach((docSnap) => {
+    if (!seenDates.has(docSnap.id)) {
+      batch.delete(docSnap.ref)
+    }
+  })
+
+  await batch.commit()
+  console.log(`Dni z wydarzeniami medalowymi: ${grouped.size}`)
 }
 
 async function main() {
   await syncMedals()
-  await syncEvents()
+  const events = await syncEvents()
+  await syncDailyMedalEvents(events)
 }
 
 main().catch((error) => {

@@ -1,131 +1,290 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { db } from '../firebase'
-import { collection, query, orderBy, limit, getDocs, where } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from 'firebase/firestore'
 
 const events = ref([])
 const loading = ref(true)
+const todayMedalCount = ref(0)
+
+const todayIso = new Date().toISOString().slice(0, 10)
+
+const groupedEvents = computed(() => {
+  const groups = []
+  let current = null
+
+  for (const event of events.value) {
+    if (!current || current.date !== event.date) {
+      current = { date: event.date, items: [], medalCount: 0 }
+      groups.push(current)
+    }
+    current.items.push(event)
+    if (event.isMedalEvent) current.medalCount += 1
+  }
+
+  return groups
+})
 
 const fetchEvents = async () => {
   try {
-    const today = new Date().toISOString().slice(0, 10)
-    
     const q = query(
-        collection(db, 'events'),
-        where('date', '>=', today),
-        orderBy('date', 'asc'),
-        orderBy('time', 'asc'),
-        limit(10) // <--- ZMIANA NA 10 WYDARZEŃ
+      collection(db, 'events'),
+      where('date', '>=', todayIso),
+      orderBy('date', 'asc'),
+      orderBy('time', 'asc'),
+      limit(20),
     )
-    
+
     const snap = await getDocs(q)
-    events.value = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-  } catch (e) {
-    console.error("Błąd terminarza:", e)
+    events.value = snap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))
+
+    const summarySnap = await getDoc(doc(db, 'daily_medal_events', todayIso))
+    todayMedalCount.value = summarySnap.exists() ? Number(summarySnap.data().totalMedalEvents || 0) : 0
+  } catch (error) {
+    console.error('Błąd terminarza:', error)
   } finally {
     loading.value = false
   }
 }
 
 onMounted(() => {
-    fetchEvents()
+  fetchEvents()
 })
 
 const formatDate = (dateStr) => {
-    if(!dateStr) return ''
-    const [y, m, d] = dateStr.split('-')
-    return `${d}.${m}`
+  if (!dateStr) return ''
+  const [year, month, day] = dateStr.split('-')
+  return `${day}.${month}.${year}`
 }
 
-const isToday = (dateStr) => {
-    const today = new Date().toISOString().slice(0, 10)
-    return dateStr === today
-}
+const isToday = (dateStr) => dateStr === todayIso
 </script>
 
 <template>
   <div class="card events-card">
-      <div class="card-header">
-          <h3>📅 TERMINARZ</h3>
-          <div class="pulse-dot"></div>
+    <div class="card-header">
+      <h3>📅 Terminarz</h3>
+      <div class="header-badges">
+        <span class="medal-counter">🥇 Dziś medalowe: {{ todayMedalCount }}</span>
+        <div class="pulse-dot"></div>
       </div>
-      
-      <div v-if="loading" class="state-msg">Ładowanie startów...</div>
-      <div v-else-if="events.length === 0" class="state-msg">Brak zaplanowanych startów.</div>
-      
-      <ul class="events-list" v-else>
-          <li v-for="ev in events" :key="ev.id" :class="{ 'today-highlight': isToday(ev.date) }">
-              <div class="event-time-box">
-                  <span class="date">{{ formatDate(ev.date) }}</span>
-                  <span class="time">{{ ev.time }}</span>
-              </div>
+    </div>
 
-              <div class="event-info">
-                  <div class="sport-label">
-                      <i :class="ev.icon"></i> {{ ev.sport }}
-                      <span v-if="isToday(ev.date)" class="live-badge">DZIŚ</span>
-                  </div>
-                  <div class="event-title">{{ ev.title }}</div>
+    <div v-if="loading" class="state-msg">Ładowanie startów...</div>
+    <div v-else-if="events.length === 0" class="state-msg">Brak zaplanowanych startów.</div>
+
+    <div v-else class="events-groups">
+      <div v-for="group in groupedEvents" :key="group.date" class="events-day">
+        <div class="day-header" :class="{ today: isToday(group.date) }">
+          <strong>{{ formatDate(group.date) }}</strong>
+          <span>Medalowe: {{ group.medalCount }}</span>
+        </div>
+
+        <ul class="events-list">
+          <li v-for="event in group.items" :key="event.id" :class="{ 'today-highlight': isToday(event.date) }">
+            <div class="event-time-box">
+              <span class="time">{{ event.time }}</span>
+            </div>
+
+            <div class="event-info">
+              <div class="sport-label">
+                <i :class="event.icon"></i> {{ event.sport }}
+                <span v-if="event.isMedalEvent" class="medal-badge">MEDAL</span>
+                <span v-if="isToday(event.date)" class="live-badge">DZIŚ</span>
               </div>
+              <div class="event-title">{{ event.title }}</div>
+            </div>
           </li>
-      </ul>
+        </ul>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.card { background: var(--bg-card); border-radius: 12px; padding: 0; border: 1px solid #334155; margin-bottom: 20px; overflow: hidden; }
-.card-header { 
-    padding: 15px 20px; 
-    border-bottom: 1px solid #334155; 
-    display: flex; 
-    align-items: center; 
-    justify-content: space-between;
-    background: rgba(15, 23, 42, 0.5);
+.card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 0;
+  border: 1px solid #334155;
+  margin-bottom: 20px;
+  overflow: hidden;
 }
-h3 { margin: 0; color: white; font-size: 1rem; border-left: 4px solid var(--accent-cyan); padding-left: 10px; font-family: 'Oswald', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; }
 
-.pulse-dot { width: 8px; height: 8px; background-color: var(--accent-cyan); border-radius: 50%; box-shadow: 0 0 0 rgba(6, 182, 212, 0.7); animation: pulse 2s infinite; }
-@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(6, 182, 212, 0); } 100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); } }
-
-.state-msg { text-align: center; color: #64748b; font-size: 0.9rem; padding: 20px; }
-
-.events-list { list-style: none; padding: 0; margin: 0; }
-.events-list li { 
-    display: flex; 
-    gap: 15px; 
-    padding: 15px 20px; 
-    border-bottom: 1px solid #1e293b; 
-    align-items: center;
-    transition: background 0.2s;
+.card-header {
+  padding: 15px 20px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(15, 23, 42, 0.5);
 }
-.events-list li:last-child { border-bottom: none; }
-.events-list li:hover { background: rgba(255,255,255,0.03); }
 
-.today-highlight { background: rgba(6, 182, 212, 0.05); }
-
-.event-time-box { 
-    display: flex; 
-    flex-direction: column; 
-    align-items: center; 
-    justify-content: center;
-    background: #0f172a; 
-    padding: 8px 0; 
-    width: 55px;
-    border-radius: 8px; 
-    border: 1px solid #334155;
-    flex-shrink: 0; 
+h3 {
+  margin: 0;
+  color: white;
+  font-size: 1rem;
+  border-left: 4px solid var(--accent-cyan);
+  padding-left: 10px;
+  font-family: 'Oswald', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
-.date { font-size: 0.75rem; color: #94a3b8; font-weight: 700; margin-bottom: 2px; }
-.time { font-size: 1rem; color: var(--accent-cyan); font-weight: 800; line-height: 1; }
 
-.event-info { flex-grow: 1; }
-.sport-label { font-size: 0.7rem; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; font-weight: 600; }
-.sport-label i { color: var(--accent-cyan); margin-right: 6px; }
-
-.live-badge { 
-    background: #ef4444; color: white; font-size: 0.6rem; padding: 1px 5px; border-radius: 4px; margin-left: auto; font-weight: bold; animation: pulse-red 2s infinite; 
+.header-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
-@keyframes pulse-red { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
 
-.event-title { font-weight: 700; font-size: 0.95rem; color: #f1f5f9; line-height: 1.3; }
+.medal-counter {
+  font-size: 0.75rem;
+  color: #f8c96b;
+  border: 1px solid rgba(248, 201, 107, 0.3);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(248, 201, 107, 0.08);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--accent-cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 0 rgba(6, 182, 212, 0.7);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.7); }
+  70% { box-shadow: 0 0 0 6px rgba(6, 182, 212, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+}
+
+.state-msg {
+  text-align: center;
+  color: #64748b;
+  font-size: 0.9rem;
+  padding: 20px;
+}
+
+.events-groups {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.events-day {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.day-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #93acd3;
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.day-header.today {
+  color: #d8f9ff;
+  background: rgba(0, 212, 255, 0.12);
+}
+
+.events-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.events-list li {
+  display: flex;
+  gap: 12px;
+  padding: 10px;
+  border-top: 1px solid #1e293b;
+  align-items: center;
+  transition: background 0.2s;
+}
+
+.events-list li:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.today-highlight {
+  background: rgba(6, 182, 212, 0.05);
+}
+
+.event-time-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+  padding: 8px 0;
+  width: 54px;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  flex-shrink: 0;
+}
+
+.time {
+  font-size: 0.92rem;
+  color: var(--accent-cyan);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.event-info {
+  flex-grow: 1;
+}
+
+.sport-label {
+  font-size: 0.67rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.sport-label i {
+  color: var(--accent-cyan);
+}
+
+.medal-badge {
+  background: rgba(245, 158, 11, 0.18);
+  color: #f9d27f;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  font-size: 0.58rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.live-badge {
+  background: #ef4444;
+  color: white;
+  font-size: 0.58rem;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: auto;
+  font-weight: 700;
+}
+
+.event-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #f1f5f9;
+  line-height: 1.3;
+}
 </style>
