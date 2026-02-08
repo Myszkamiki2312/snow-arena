@@ -1,0 +1,40 @@
+/* NOWY STYL - DARK MODE PREMIUM */
+
+:root {
+  /* Paleta kolorów "Cyber Ice" */
+  --bg-dark: #0f172a;       /* Bardzo ciemne tło (prawie czarne) */
+  --bg-card: #1e293b;       /* Tło kafelków */
+  --accent-cyan: #06b6d4;   /* Neonowy błękit */
+  --accent-glow: #22d3ee;   /* Jaśniejszy neon do podświetleń */
+  --text-main: #f1f5f9;     /* Biały tekst */
+  --text-muted: #94a3b8;    /* Szary tekst */
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100vw;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background-color: var(--bg-dark); /* Ciemne tło */
+  color: var(--text-main);
+  font-family: 'Roboto', sans-serif;
+}
+
+#app {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  display: block;
+}
+
+a { text-decoration: none; color: inherit; transition: 0.3s; }
+a:hover { color: var(--accent-cyan); }
+ul { list-style: none; padding: 0; margin: 0; }
+
+/* Pasek przewijania (żeby był ładny) */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #0f172a; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-cyan); }
