@@ -285,13 +285,56 @@ const cancelPollEdit = () => {
     pollForm.value = { question: '', option1: '', option2: '', option3: '', option4: '' }
 }
 
-onMounted(() => { fetchArticles(); fetchMedals(); fetchEvents(); fetchPoll() })
+const loadingDrafts = ref(false)
+const draftsList = ref([])
+
+const fetchDrafts = async () => {
+    loadingDrafts.value = true
+    try {
+        const q = query(collection(db, 'article_drafts'), orderBy('createdAt', 'desc'))
+        const snap = await getDocs(q)
+        draftsList.value = snap.docs.map(docItem => ({ id: docItem.id, ...docItem.data() }))
+    } catch (e) {
+        console.error(e)
+    }
+    loadingDrafts.value = false
+}
+
+const publishDraft = async (draft) => {
+    if(!confirm(`Opublikować szkic: ${draft.title}?`)) return
+    try {
+        const payload = {
+            title: draft.title,
+            category: draft.category || 'Skoki narciarskie',
+            date: draft.date || new Date().toISOString().slice(0,10),
+            imageUrl: draft.imageUrl || '',
+            content: draft.content || '',
+            isTopStory: false
+        }
+        await addDoc(collection(db, 'articles'), payload)
+        await deleteDoc(doc(db, 'article_drafts', draft.id))
+        await fetchDrafts()
+        await fetchArticles()
+        alert('Szkic opublikowany!')
+    } catch (e) {
+        alert('Błąd publikacji: ' + e.message)
+    }
+}
+
+const deleteDraft = async (id) => {
+    if(!confirm('Usunąć ten szkic?')) return
+    await deleteDoc(doc(db, 'article_drafts', id))
+    await fetchDrafts()
+}
+
+onMounted(() => { fetchArticles(); fetchMedals(); fetchEvents(); fetchPoll(); fetchDrafts() })
 </script>
 
 <template>
   <div class="admin-container">
     <div class="tabs">
         <button @click="activeTab = 'news'" :class="{ active: activeTab === 'news' }">📰 NEWSY</button>
+        <button @click="activeTab = 'drafts'" :class="{ active: activeTab === 'drafts' }">🤖 SZKICE AI</button>
         <button @click="activeTab = 'medals'" :class="{ active: activeTab === 'medals' }">🥇 MEDALE</button>
         <button @click="activeTab = 'events'" :class="{ active: activeTab === 'events' }">📅 TERMINARZ</button>
         <button @click="activeTab = 'poll'" :class="{ active: activeTab === 'poll' }">📊 SONDA</button>
@@ -319,6 +362,26 @@ onMounted(() => { fetchArticles(); fetchMedals(); fetchEvents(); fetchPoll() })
                  </div>
              </div>
              <div class="pagination" v-if="totalPages > 1"><button @click="prevPage" :disabled="currentPage === 1">❮</button><span>{{ currentPage }} / {{ totalPages }}</span><button @click="nextPage" :disabled="currentPage === totalPages">❯</button></div>
+        </div>
+    </div>
+
+    <div v-show="activeTab === 'drafts'" class="tab-content">
+        <div class="admin-card draft-card">
+            <h2>SZKICE Z AUTOMATU ({{ draftsList.length }})</h2>
+            <p style="color:#94a3b8; margin-top:-6px;">Nowe szkice tworzą się automatycznie po wydarzeniach medalowych.</p>
+            <div v-if="loadingDrafts" class="state-line">Ładowanie szkiców...</div>
+            <div v-else-if="draftsList.length === 0" class="state-line">Brak szkiców do publikacji.</div>
+
+            <div class="list-item draft-item" v-for="draft in draftsList" :key="draft.id">
+                <div class="item-info">
+                    <span style="color:#06b6d4; font-weight:bold; margin-right:10px;">{{ draft.date }} {{ draft.time || '' }}</span>
+                    <strong>{{ draft.category }}:</strong> {{ draft.title }}
+                </div>
+                <div class="item-actions">
+                    <button @click="publishDraft(draft)" class="btn-mini publish">P</button>
+                    <button @click="deleteDraft(draft.id)" class="btn-mini del">X</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -408,6 +471,7 @@ onMounted(() => { fetchArticles(); fetchMedals(); fetchEvents(); fetchPoll() })
 .medal-card { border-top: 4px solid gold; }
 .event-card { border-top: 4px solid #f43f5e; }
 .poll-card-admin { border-top: 4px solid #8b5cf6; } 
+.draft-card { border-top: 4px solid #22c55e; }
 .editing-mode { border: 2px solid #06b6d4; background: #162032; }
 
 input, select, textarea { width: 100%; padding: 12px; background: #0f172a; color: white; border: 1px solid #333; margin-bottom: 10px; border-radius:6px; outline: none; }
@@ -423,6 +487,7 @@ input:focus, select:focus, textarea:focus { border-color: #06b6d4; }
 .g{color:gold} .s{color:silver} .b{color:#cd7f32}
 .btn-mini { width: 35px; height: 35px; border: none; cursor: pointer; border-radius:4px; margin-left:5px; font-weight:bold; } 
 .edit{background:#3b82f6; color:white} .del{background:#ef4444; color:white}
+.publish{background:#22c55e; color:black}
 label { font-weight:bold; color:#aaa; font-size:0.8rem; display: block; margin-bottom: 5px; }
 .articles-list { min-height: 100px; }
 .checkbox-group { display: flex; align-items: center; gap: 10px; background: rgba(6, 182, 212, 0.1); padding: 15px; border-radius: 8px; border: 1px solid #06b6d4; margin-bottom: 15px; }
@@ -431,4 +496,6 @@ label { font-weight:bold; color:#aaa; font-size:0.8rem; display: block; margin-b
 .top-story-item { border-left: 4px solid #06b6d4; background: rgba(6, 182, 212, 0.05); }
 .pagination { display: flex; justify-content: center; gap: 15px; margin-top: 20px; }
 .pagination button { background: #334155; color: white; border: none; padding: 5px 15px; border-radius: 6px; cursor: pointer; }
+.state-line { text-align:center; color:#94a3b8; background:#0f172a; padding:12px; border-radius:8px; border:1px solid #334155; }
+.draft-item { border-left: 3px solid #22c55e; }
 </style>

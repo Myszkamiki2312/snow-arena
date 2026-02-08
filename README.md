@@ -62,3 +62,14 @@ Skrypt pobiera:
 export GOOGLE_APPLICATION_CREDENTIALS="/sciezka/do/service-account.json"
 npm run sync-cortina-wikipedia
 ```
+
+## Automatyczne szkice artykułów + mail
+
+Workflow po synchronizacji:
+- generuje szkice do kolekcji `article_drafts`,
+- wysyła mail, gdy pojawią się nowe szkice.
+
+Wymagane sekrety GitHub:
+- `SMTP_USER` (adres Gmail)
+- `SMTP_PASS` (App Password z Google, nie zwykłe hasło)
+- `NOTIFY_EMAIL_TO` (adres odbiorcy powiadomień)
