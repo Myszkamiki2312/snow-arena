@@ -6,6 +6,7 @@ import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from '
 const events = ref([])
 const loading = ref(true)
 const todayMedalCount = ref(0)
+const gamesEndDate = '2026-02-22'
 
 const getLocalIsoDate = (timeZone = 'Europe/Warsaw') => {
   const formatter = new Intl.DateTimeFormat('en-CA', {
@@ -73,7 +74,9 @@ const fetchEvents = async () => {
     )
 
     const snap = await getDocs(q)
-    events.value = snap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))
+    events.value = snap.docs
+      .map((docItem) => ({ id: docItem.id, ...docItem.data() }))
+      .filter((event) => event.date <= gamesEndDate && (event.isMedalEvent === true || looksLikeMedalEvent(event.title)))
 
     const fromEvents = events.value.filter((event) => {
       if (event.date !== todayIso) return false

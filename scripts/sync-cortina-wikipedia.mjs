@@ -216,6 +216,10 @@ function parseScheduleRows(html, sportMeta) {
     const time = normalizeTime(timeText)
     const id = deterministicId([sportMeta.sport, isoDate, time, eventText])
     const isMedalEvent = detectMedalEvent(eventText)
+    const gamesEndDate = '2026-02-22'
+
+    if (!isMedalEvent) return
+    if (isoDate > gamesEndDate) return
 
     events.push({
       id,
