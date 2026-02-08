@@ -93,10 +93,30 @@ function detectMedalEvent(title) {
   const text = cleanText(title).toLowerCase()
   if (!text) return false
 
-  const excluded = ['qualification', 'qualifying', 'training', 'practice', 'round robin', 'preliminary', 'group stage', 'heat']
+  const excluded = ['qualification', 'qualifying', 'training', 'practice', 'round robin', 'preliminary', 'group stage', 'heats', 'heat ']
   if (excluded.some((item) => text.includes(item))) return false
 
-  const medalLike = ['final', 'medal', 'gold medal game', 'bronze medal game', 'big final', 'small final']
+  const medalLike = [
+    'final',
+    'medal',
+    'gold medal game',
+    'bronze medal game',
+    'big final',
+    'small final',
+    'downhill',
+    'super-g',
+    'giant slalom',
+    'slalom',
+    'skiathlon',
+    'big air',
+    'halfpipe',
+    'moguls',
+    'mass start',
+    'relay',
+    'team event',
+    'individual',
+    'pursuit',
+  ]
   return medalLike.some((item) => text.includes(item))
 }
 

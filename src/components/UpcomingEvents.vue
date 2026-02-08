@@ -7,7 +7,44 @@ const events = ref([])
 const loading = ref(true)
 const todayMedalCount = ref(0)
 
-const todayIso = new Date().toISOString().slice(0, 10)
+const getLocalIsoDate = (timeZone = 'Europe/Warsaw') => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  return formatter.format(new Date())
+}
+
+const looksLikeMedalEvent = (title = '') => {
+  const text = String(title).toLowerCase()
+  if (!text) return false
+  const excluded = ['qualification', 'qualifying', 'training', 'practice', 'round robin', 'preliminary', 'group stage', 'heats', 'heat ']
+  if (excluded.some((item) => text.includes(item))) return false
+  const medalLike = [
+    'final',
+    'medal',
+    'gold medal',
+    'bronze medal',
+    'downhill',
+    'super-g',
+    'giant slalom',
+    'slalom',
+    'skiathlon',
+    'big air',
+    'halfpipe',
+    'moguls',
+    'mass start',
+    'relay',
+    'team event',
+    'individual',
+    'pursuit',
+  ]
+  return medalLike.some((item) => text.includes(item))
+}
+
+const todayIso = getLocalIsoDate()
 
 const groupedEvents = computed(() => {
   const groups = []
@@ -38,8 +75,15 @@ const fetchEvents = async () => {
     const snap = await getDocs(q)
     events.value = snap.docs.map((docItem) => ({ id: docItem.id, ...docItem.data() }))
 
+    const fromEvents = events.value.filter((event) => {
+      if (event.date !== todayIso) return false
+      return Boolean(event.isMedalEvent) || looksLikeMedalEvent(event.title)
+    }).length
+
     const summarySnap = await getDoc(doc(db, 'daily_medal_events', todayIso))
-    todayMedalCount.value = summarySnap.exists() ? Number(summarySnap.data().totalMedalEvents || 0) : 0
+    const fromSummary = summarySnap.exists() ? Number(summarySnap.data().totalMedalEvents || 0) : 0
+
+    todayMedalCount.value = Math.max(fromEvents, fromSummary)
   } catch (error) {
     console.error('Błąd terminarza:', error)
   } finally {
